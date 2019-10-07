@@ -65,11 +65,25 @@ func helpProvider(config *plugins.Configuration, enabledRepos []string) (*plugin
 		reviewCount = *config.Blunderbuss.FileWeightCount
 	}
 
+	yamlSnippet, err := plugins.CommentMap.GenYaml(&plugins.Configuration{
+		Blunderbuss: plugins.Blunderbuss{
+			ReviewerCount:         new(int),
+			MaxReviewerCount:      *new(int),
+			FileWeightCount:       new(int),
+			ExcludeApprovers:      *new(bool),
+			UseStatusAvailability: *new(bool),
+		},
+	})
+	if err != nil {
+		logrus.WithError(err).Warnf("cannot generate comments for %s plugin", PluginName)
+	}
+
 	pluginHelp := &pluginhelp.PluginHelp{
 		Description: "The blunderbuss plugin automatically requests reviews from reviewers when a new PR is created. The reviewers are selected based on the reviewers specified in the OWNERS files that apply to the files modified by the PR.",
 		Config: map[string]string{
 			"": configString(reviewCount),
 		},
+		Snippet: yamlSnippet,
 	}
 	pluginHelp.AddCommand(pluginhelp.Command{
 		Usage:       "/auto-cc",

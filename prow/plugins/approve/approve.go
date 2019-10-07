@@ -133,15 +133,17 @@ func helpProvider(config *plugins.Configuration, enabledRepos []string) (*plugin
 					"ORGANIZATION",
 					"ORGANIZATION/REPOSITORY",
 				},
+				IssueRequired:                 *new(bool),
 				DeprecatedImplicitSelfApprove: new(bool),
 				RequireSelfApproval:           new(bool),
+				LgtmActsAsApprove:             *new(bool),
 				DeprecatedReviewActsAsApprove: new(bool),
 				IgnoreReviewState:             new(bool),
 			},
 		},
 	})
 	if err != nil {
-		logrus.WithError(err).Warn("cannot generate comments for approve plugin")
+		logrus.WithError(err).Warnf("cannot generate comments for %s plugin", PluginName)
 	}
 
 	pluginHelp := &pluginhelp.PluginHelp{
