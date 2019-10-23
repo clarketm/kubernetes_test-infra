@@ -84,23 +84,29 @@ func (sl *Client) urlValues() *url.Values {
 }
 
 func (sl *Client) postMessage(url string, uv *url.Values) ([]byte, error) {
+	sl.log("slackreporter: ", url, *uv)
 	resp, err := http.PostForm(url, *uv)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
+	sl.log("slackreporter: ", resp.StatusCode)
+	sl.log("slackreporter: ", resp.Header)
+	sl.log("slackreporter: ", uv.Get("token"))
 	if resp.StatusCode != 200 {
 		t, _ := ioutil.ReadAll(resp.Body)
 		return nil, errors.New(string(t))
 	}
 	t, _ := ioutil.ReadAll(resp.Body)
+	sl.log("slackreporter: ", t)
 	return t, nil
 }
 
 // WriteMessage adds text to channel
 func (sl *Client) WriteMessage(text, channel string) error {
 	sl.log("WriteMessage", text, channel)
+	sl.log("slackreporter: ", sl.fake)
 	if sl.fake {
 		return nil
 	}
@@ -109,6 +115,7 @@ func (sl *Client) WriteMessage(text, channel string) error {
 	uv.Add("channel", channel)
 	uv.Add("text", text)
 
+	sl.log("slackreporter: ", "sending POST")
 	_, err := sl.postMessage(chatPostMessage, uv)
 	return err
 }
