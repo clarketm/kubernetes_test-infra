@@ -138,6 +138,10 @@ func (o Options) ExecuteProcess() (int, error) {
 	if len(o.Args) > 1 {
 		arguments = o.Args[1:]
 	}
+
+	fmt.Println(executable, arguments)
+	logrus.Info(executable, arguments)
+
 	command := exec.Command(executable, arguments...)
 	command.Stderr = output
 	command.Stdout = output
