@@ -49,11 +49,12 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/sets"
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
-	"k8s.io/test-infra/prow/interrupts"
-	"k8s.io/test-infra/prow/simplifypath"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/yaml"
+
+	"k8s.io/test-infra/prow/interrupts"
+	"k8s.io/test-infra/prow/simplifypath"
 
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowv1 "k8s.io/test-infra/prow/client/clientset/versioned/typed/prowjobs/v1"
@@ -1386,9 +1387,19 @@ func handleRerun(prowJobClient prowv1.ProwJobInterface, createProwJob bool, cfg 
 			return
 		}
 
+		log.Errorf("Get latest with: %s", pj.String())
+
 		pjNewest, err := ja.GetNewestProwJob(pj.String())
 		if err != nil {
+			log.Errorf("Unable to get latest: %v", err)
+		} else {
 			pj = pjNewest
+		}
+
+		if pjNewest == nil {
+			log.Error("Unable to get latest")
+		} else {
+			log.WithFields(logrus.Fields{"pjN": pjNewest, "pj": pj}).Error("Fetched latest")
 		}
 
 		newPJ := pjutil.NewProwJob(pj.Spec, pj.ObjectMeta.Labels, pj.ObjectMeta.Annotations)
