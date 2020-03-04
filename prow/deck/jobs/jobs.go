@@ -31,6 +31,7 @@ import (
 	"github.com/sirupsen/logrus"
 	coreapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
+
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/kube"
@@ -91,14 +92,15 @@ func NewJobAgent(kc serviceClusterClient, plClients map[string]PodLogClient, cfg
 
 // JobAgent creates lists of jobs, updates their status and returns their run logs.
 type JobAgent struct {
-	kc        serviceClusterClient
-	pkcs      map[string]PodLogClient
-	config    config.Getter
-	prowJobs  []prowapi.ProwJob
-	jobs      []Job
-	jobsMap   map[string]Job                        // pod name -> Job
-	jobsIDMap map[string]map[string]prowapi.ProwJob // job name -> id -> ProwJob
-	mut       sync.Mutex
+	kc            serviceClusterClient
+	pkcs          map[string]PodLogClient
+	config        config.Getter
+	prowJobs      []prowapi.ProwJob
+	jobs          []Job
+	jobsMap       map[string]Job                        // pod name -> Job
+	jobsNewestMap map[string]prowapi.ProwJob            // job name -> newest ProwJob
+	jobsIDMap     map[string]map[string]prowapi.ProwJob // job name -> id -> ProwJob
+	mut           sync.Mutex
 }
 
 // Start will start the job and periodically update it.
@@ -148,6 +150,21 @@ func (ja *JobAgent) GetProwJob(job, id string) (prowapi.ProwJob, error) {
 		return prowapi.ProwJob{}, errProwjobNotFound
 	}
 	return j, nil
+}
+
+// GetNewestProwJob finds the newest corresponding Prowjob resource from the provided job string (i.e. job.String())
+func (ja *JobAgent) GetNewestProwJob(jobStr string) (*prowapi.ProwJob, error) {
+	if ja == nil {
+		return &prowapi.ProwJob{}, fmt.Errorf("Prow job agent doesn't exist (are you running locally?)")
+	}
+	var j prowapi.ProwJob
+	ja.mut.Lock()
+	j, ok := ja.jobsNewestMap[jobStr]
+	ja.mut.Unlock()
+	if !ok {
+		return &prowapi.ProwJob{}, errProwjobNotFound
+	}
+	return &j, nil
 }
 
 // GetJobLog returns the job logs, works for both kubernetes and jenkins agent types.
@@ -207,6 +224,7 @@ func (ja *JobAgent) update() error {
 	var njs []Job
 	njsMap := make(map[string]Job)
 	njsIDMap := make(map[string]map[string]prowapi.ProwJob)
+	njsNewestMap := make(map[string]prowapi.ProwJob)
 
 	sort.Sort(byPJStartTime(pjs))
 
@@ -251,6 +269,9 @@ func (ja *JobAgent) update() error {
 			njsIDMap[j.Spec.Job] = make(map[string]prowapi.ProwJob)
 		}
 		njsIDMap[j.Spec.Job][buildID] = j
+		if _, ok := njsNewestMap[j.String()]; !ok {
+			njsNewestMap[j.String()] = j
+		}
 	}
 
 	ja.mut.Lock()
@@ -259,5 +280,6 @@ func (ja *JobAgent) update() error {
 	ja.jobs = njs
 	ja.jobsMap = njsMap
 	ja.jobsIDMap = njsIDMap
+	ja.jobsNewestMap = njsNewestMap
 	return nil
 }

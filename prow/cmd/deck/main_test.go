@@ -37,6 +37,7 @@ import (
 	"github.com/gorilla/sessions"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/oauth2"
+	"k8s.io/test-infra/prow/deck/jobs"
 	"k8s.io/test-infra/prow/github/fakegithub"
 	"k8s.io/test-infra/prow/githuboauth"
 	"k8s.io/test-infra/prow/plugins"
@@ -391,7 +392,7 @@ func TestRerun(t *testing.T) {
 							},
 						},
 					},
-					RerunAuthConfig: prowapi.RerunAuthConfig{
+					RerunAuthConfig: &prowapi.RerunAuthConfig{
 						AllowAnyone:   false,
 						GitHubUsers:   []string{"authorized", "alsoauthorized"},
 						GitHubTeamIDs: []int{42},
@@ -401,8 +402,8 @@ func TestRerun(t *testing.T) {
 					State: prowapi.PendingState,
 				},
 			})
-			configGetter := func() *prowapi.RerunAuthConfig {
-				return &prowapi.RerunAuthConfig{
+			authCfgGetter := func(refs *prowapi.Refs) prowapi.RerunAuthConfig {
+				return prowapi.RerunAuthConfig{
 					AllowAnyone: tc.allowAnyone,
 					GitHubUsers: tc.authorized,
 				}
@@ -433,8 +434,10 @@ func TestRerun(t *testing.T) {
 			goa := githuboauth.NewAgent(mockConfig, &logrus.Entry{})
 			ghc := mockGitHubConfigGetter{githubLogin: tc.login}
 			rc := &fakegithub.FakeClient{OrgMembers: map[string][]string{"org": {"org-member"}}}
+			ca := config.Agent{}
 			pca := plugins.NewFakeConfigAgent()
-			handler := handleRerun(fakeProwJobClient.ProwV1().ProwJobs("prowjobs"), tc.rerunCreatesJob, configGetter, goa, ghc, rc, &pca, logrus.WithField("handler", "/rerun"))
+			ja := jobs.NewJobAgent(&filteringProwJobLister{}, map[string]jobs.PodLogClient{}, ca.Config)
+			handler := handleRerun(fakeProwJobClient.ProwV1().ProwJobs("prowjobs"), tc.rerunCreatesJob, authCfgGetter, ja, goa, ghc, rc, &pca, logrus.WithField("handler", "/rerun"))
 			handler.ServeHTTP(rr, req)
 			if rr.Code != tc.httpCode {
 				t.Fatalf("Bad error code: %d", rr.Code)
