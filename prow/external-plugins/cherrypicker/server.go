@@ -49,6 +49,7 @@ type githubClient interface {
 	CreateComment(org, repo string, number int, comment string) error
 	CreateFork(org, repo string) error
 	CreatePullRequest(org, repo, title, body, head, base string, canModify bool) (int, error)
+	CreateIssue(org, repo, title, body string, milestone int, labels, assignees []string) (int, error)
 	GetPullRequest(org, repo string, number int) (*github.PullRequest, error)
 	GetPullRequestPatch(org, repo string, number int) ([]byte, error)
 	GetPullRequests(org, repo string) ([]github.PullRequest, error)
@@ -94,6 +95,8 @@ type Server struct {
 	prowAssignments bool
 	// Allow anybody to do cherrypicks.
 	allowAll bool
+	// Create an issue on failure.
+	issueOnFailure bool
 
 	bare     *http.Client
 	patchURL string
@@ -420,11 +423,27 @@ func (s *Server) handle(l *logrus.Entry, requestor string, comment *github.Issue
 		return err
 	}
 
+	// Title and body for GitHub issue/pr.
+	title = fmt.Sprintf("[%s] %s", targetBranch, title)
+	var cherryPickBody string
+	if s.prowAssignments {
+		cherryPickBody = cherrypicker.CreateCherrypickBody(num, requestor, releaseNoteFromParentPR(body))
+	} else {
+		cherryPickBody = cherrypicker.CreateCherrypickBody(num, "", releaseNoteFromParentPR(body))
+	}
+
 	// Apply the patch.
 	if err := r.Am(localPath); err != nil {
 		resp := fmt.Sprintf("#%d failed to apply on top of branch %q:\n```%v\n```", num, targetBranch, err)
 		s.log.WithFields(l.Data).Info(resp)
-		return s.createComment(org, repo, num, comment, resp)
+		err := s.createComment(org, repo, num, comment, resp)
+
+		if s.issueOnFailure {
+			resp = fmt.Sprintf("Manual cherrypick required.\n\n%s", resp)
+			return s.createIssue(org, repo, title, resp, num, comment, nil, []string{requestor})
+		}
+
+		return err
 	}
 
 	push := r.ForcePush
@@ -439,14 +458,6 @@ func (s *Server) handle(l *logrus.Entry, requestor string, comment *github.Issue
 	}
 
 	// Open a PR in GitHub.
-	title = fmt.Sprintf("[%s] %s", targetBranch, title)
-	var cherryPickBody string
-	if s.prowAssignments {
-		cherryPickBody = cherrypicker.CreateCherrypickBody(num, requestor, releaseNoteFromParentPR(body))
-	} else {
-		cherryPickBody = cherrypicker.CreateCherrypickBody(num, "", releaseNoteFromParentPR(body))
-	}
-
 	head := fmt.Sprintf("%s:%s", s.botName, newBranch)
 	createdNum, err := s.ghc.CreatePullRequest(org, repo, title, cherryPickBody, head, targetBranch, true)
 	if err != nil {
@@ -481,6 +492,16 @@ func (s *Server) createComment(org, repo string, num int, comment *github.IssueC
 		return s.ghc.CreateComment(org, repo, num, plugins.FormatICResponse(*comment, resp))
 	}
 	return s.ghc.CreateComment(org, repo, num, fmt.Sprintf("In response to a cherrypick label: %s", resp))
+}
+
+// createIssue creates an issue on GitHub.
+func (s *Server) createIssue(org, repo, title, body string, num int, comment *github.IssueComment, labels, assignees []string) error {
+	issueNum, err := s.ghc.CreateIssue(org, repo, title, body, 0, labels, assignees)
+	if err != nil {
+		return s.createComment(org, repo, num, comment, fmt.Sprintf("new issue could not be created for failed cherrypick: %v", err))
+	}
+
+	return s.createComment(org, repo, num, comment, fmt.Sprintf("new issue created for failed cherrypick: #%d", issueNum))
 }
 
 // ensureForkExists ensures a fork of org/repo exists for the bot.

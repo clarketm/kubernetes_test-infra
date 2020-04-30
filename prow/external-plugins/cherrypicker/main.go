@@ -44,6 +44,7 @@ type options struct {
 	webhookSecretFile string
 	prowAssignments   bool
 	allowAll          bool
+	issueOnFailure    bool
 }
 
 func (o *options) Validate() error {
@@ -65,6 +66,7 @@ func gatherOptions() options {
 	fs.StringVar(&o.webhookSecretFile, "hmac-secret-file", "/etc/webhook/hmac", "Path to the file containing the GitHub HMAC secret.")
 	fs.BoolVar(&o.prowAssignments, "use-prow-assignments", true, "Use prow commands to assign cherrypicked PRs.")
 	fs.BoolVar(&o.allowAll, "allow-all", false, "Allow anybody to use automated cherrypicks by skipping GitHub organization membership checks.")
+	fs.BoolVar(&o.issueOnFailure, "create-issue-on-failure", false, "Create a GitHub issue and assign it to the requestor if a cherrypick fails.")
 	for _, group := range []flagutil.OptionGroup{&o.github} {
 		group.AddFlags(fs)
 	}
@@ -128,6 +130,7 @@ func main() {
 		labels:          o.labels.Strings(),
 		prowAssignments: o.prowAssignments,
 		allowAll:        o.allowAll,
+		issueOnFailure:  o.issueOnFailure,
 
 		bare:     &http.Client{},
 		patchURL: "https://patch-diff.githubusercontent.com",
