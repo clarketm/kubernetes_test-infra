@@ -642,7 +642,6 @@ func TestCherryPickCreateIssue(t *testing.T) {
 		prNum          int
 		labels         []string
 		assignees      []string
-		issueOnFailure bool
 	}{
 		{
 			org:       "istio",

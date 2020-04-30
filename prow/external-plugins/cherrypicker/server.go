@@ -433,13 +433,14 @@ func (s *Server) handle(l *logrus.Entry, requestor string, comment *github.Issue
 	}
 
 	// Apply the patch.
-	if err := r.Am(localPath); err != nil {
+	if err := r.Am(localPath); true {
+		err = fmt.Errorf("some merge error")
 		resp := fmt.Sprintf("#%d failed to apply on top of branch %q:\n```%v\n```", num, targetBranch, err)
 		s.log.WithFields(l.Data).Info(resp)
 		err := s.createComment(org, repo, num, comment, resp)
 
 		if s.issueOnFailure {
-			resp = fmt.Sprintf("Manual cherrypick required.\n\n%s", resp)
+			resp = fmt.Sprintf("Manual cherrypick required.\n\n%v", resp)
 			return s.createIssue(org, repo, title, resp, num, comment, nil, []string{requestor})
 		}
 
