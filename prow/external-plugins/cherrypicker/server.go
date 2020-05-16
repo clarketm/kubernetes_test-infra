@@ -273,6 +273,8 @@ func (s *Server) handlePullRequest(l *logrus.Entry, pre github.PullRequestEvent)
 		return err
 	}
 
+	l.Errorf("%v %v %v %v %v %v", pre.Action, s.isCherryPickPR(author, body, headBranch), author, body, headBranch, num)
+
 	if pre.Action == github.PullRequestActionLabeled && s.isCherryPickPR(author, body, headBranch) {
 		for _, label := range labels {
 			if conditionalLabels, hasLabel := s.conditionalLabels[label.Name]; hasLabel {
